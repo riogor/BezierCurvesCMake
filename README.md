@@ -5,3 +5,5 @@ Instruction:
 - To delete a point just right-click it
 
 Program requires OpenGL and GLUT to work
+
+Made by [Lucius 15](https://github.com/Lucius15) and [Kittenlover](https://github.com/Kittenlover229)

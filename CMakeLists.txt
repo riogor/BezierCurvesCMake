@@ -7,6 +7,9 @@ include_directories(${OPENGL_INCLUDE_DIRS} C:/MinGW/include/freeglut)
 
 set(SOURCES main.cpp)
 
+set(CMAKE_CXX_FLAGS "-Wall")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
 #add_compile_options(-lfreeglut -lopengl32 -lglu32 -Wl,--subsystem,windows)
 #add_compile_options(-g)
 
