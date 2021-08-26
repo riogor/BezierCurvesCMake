@@ -2,11 +2,11 @@
 #include <vector>
 #include <cmath>
 #include <GL/gl.h>
-#include <freeglut/GL/glut.h>
+#include <glut.h>
 
 using namespace std;
 
-#define radius 5
+#define base_radius 5
 #define precision 0.001
 
 typedef pair<int, int> p;
@@ -16,8 +16,10 @@ vector<p> tmppoints;
 vector<p> bezierpoints;
 
 auto movpoint = points.end();
+bool isrendersubbezier = false;
+double subbezierT = 0.5;
 
-auto findPoint(int x, int y)
+auto findPoint(int x, int y, int radius)
 {
 	for(auto it = points.begin(); it < points.end(); it++)
 		if(((it->first + radius >= x) && (it->first - radius <= x)) && ((it->second + radius >= y) && (it->second - radius <= y)))
@@ -26,7 +28,7 @@ auto findPoint(int x, int y)
 	return points.end();
 }
 
-void renderCircle(int x, int y)
+void renderCircle(int x, int y, int radius)
 {
 	glBegin(GL_LINE_LOOP);
 
@@ -41,6 +43,9 @@ void renderCircle(int x, int y)
 
 void renderBezierPoint(double t)
 {	
+	if(points.empty())
+		return;
+
 	tmppoints.clear();
 	tmppoints.resize((points.size()*(points.size() + 1)) / 2);
 
@@ -61,10 +66,7 @@ void renderBezierPoint(double t)
 }
 
 void renderBezierCurve()
-{
-	if(points.empty())
-		return;
-		
+{		
 	bezierpoints.clear();
 
 	for(double t = 0; t < 1; t += precision)
@@ -88,7 +90,6 @@ void display()
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glLineWidth(2);
-
 	glBegin(GL_LINE_STRIP);
 
 	glColor3f(1.0, 1.0, 1.0);
@@ -99,14 +100,35 @@ void display()
 	glEnd();
 
 	for (auto p : points)
-		renderCircle(p.first, p.second);
+		renderCircle(p.first, p.second, base_radius);
+
+	if(isrendersubbezier)
+	{
+		renderBezierPoint(subbezierT);
+		srand(0x12e15e35b500f16e);
+
+		int stack = 0;
+		for(auto layer = points.size(); layer > 0; layer--)
+		{
+			glBegin(GL_LINE_STRIP);
+			glColor3ub(rand()%255, rand()%255, rand()%255);
+
+			for(int point = stack; point < stack+layer; point++)
+				glVertex2i(tmppoints[point].first, tmppoints[point].second);
+				
+			glEnd();
+
+			for(int point = stack; point < stack+layer; point++)
+				renderCircle(tmppoints[point].first, tmppoints[point].second, base_radius-1);
+
+			stack += layer;
+		}
+	}
 
 	renderBezierCurve();
-
 	glBegin(GL_LINE_STRIP);
 
 	glColor3f(1.0, 0, 0);
-
 	for(auto p : bezierpoints)
 		glVertex2i(p.first, p.second);
 
@@ -121,7 +143,7 @@ void mouse(int button, int state, int x, int y)
 	{
 		if (state == GLUT_DOWN)
 		{
-			auto point = findPoint(x, y);
+			auto point = findPoint(x, y, base_radius);
 			
 			if(movpoint != points.end())
 			{
@@ -145,7 +167,7 @@ void mouse(int button, int state, int x, int y)
 	{
 		if(state == GLUT_DOWN)
 		{
-			auto point = findPoint(x, y);
+			auto point = findPoint(x, y, base_radius);
 			if(point != points.end())
 			{
 				points.erase(point);
@@ -155,17 +177,49 @@ void mouse(int button, int state, int x, int y)
 	}
 }
 
+void keyboard(unsigned char key, int x, int y)
+{
+	switch(key)
+	{
+		case 'q':
+			isrendersubbezier = !isrendersubbezier;
+		break;
+
+		case 'a':
+			if((subbezierT - precision) >= 0)
+				subbezierT -= precision;
+		break;
+
+		case 'd':
+			if((subbezierT + precision)<= 1)
+				subbezierT += precision;
+		break;
+
+		case 'w':
+			if((subbezierT + 0.01) <= 1)
+				subbezierT += 0.01;
+		break;
+
+		case 's':
+			if((subbezierT - 0.01) >= 0)
+				subbezierT -= 0.01;
+		break;
+	}
+	display();
+}
+
 int main(int argc, char *argv[])
 {
 	glutInit(&argc, argv);
 
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
-	glutInitWindowSize(800, 600);
+	glutInitWindowSize(1000, 800);
 	glutCreateWindow("Bezier curves");
 
 	glutReshapeFunc(reshape);
 	glutDisplayFunc(display);
 	glutMouseFunc(mouse);
+	glutKeyboardFunc(keyboard);
 
 	glutMainLoop();
 
