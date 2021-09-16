@@ -2,7 +2,7 @@
 
 ![Programm](img/main.png)
 
-This program can render any grade Bezier curves with basic editing tools
+This program can render any grade Bezier curves with basic editing tools  
 To see controls, check [Instruction](Instruction.md)
 
 Program uses OpenGL and FreeGLUT
