@@ -1,18 +1,19 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.0.0)
 project(BezierCurves)
 
 find_package(OpenGL REQUIRED)
+find_package(freeglut QUIET)
 
-include_directories(${OPENGL_INCLUDE_DIRS} C:/MinGW/include/freeglut)
+IF(NOT freeglut_FOUND)
+	add_subdirectory(submodules/freeglut)
+ENDIF()
 
-set(SOURCES main.cpp)
+set(CMAKE_BUILD_TYPE Release)
 
-set(CMAKE_CXX_FLAGS "-Wall")
-set(CMAKE_CXX_FLAGS_RELEASE "-O2")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-#add_compile_options(-lfreeglut -lopengl32 -lglu32 -Wl,--subsystem,windows)
-#add_compile_options(-g)
+set(SOURCES ${SOURCES} main.cpp)
+add_executable(Bezier WIN32 ${SOURCES})
 
-add_executable(Bezier ${SOURCES})
-
-target_link_libraries(Bezier ${OPENGL_LIBRARIES} C:/MinGW/lib/freeglut/freeglut.lib)
+IF(NOT freeglut_FOUND)
+	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/submodules/freeglut/include/GL)
+	target_link_libraries(Bezier ${OPENGL_LIBRARIES} freeglut)
+ENDIF()

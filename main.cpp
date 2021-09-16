@@ -1,212 +1,254 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+
 #include <GL/gl.h>
 #include <glut.h>
 
 using namespace std;
 
-#define base_radius 5
-#define precision 0.001
+const int         base_radius     = 5;
+const long double precision       = 0.001L;
+const int         precisionpoints = 1.0L/precision;
 
-typedef pair<int, int> p;
+typedef pair<int,         int>         pointI;
+typedef pair<long double, long double> pointLD;
 
-vector<p> points;
-vector<p> tmppoints;
-vector<p> bezierpoints;
+vector<pointI > basepoints;
+vector<pointLD> tmppoints;
+vector<pointI > bezierpoints;
 
-auto movpoint = points.end();
-bool isrendersubbezier = false;
-double subbezierT = 0.5;
+auto        movingpoint       = basepoints.end();
+bool        isrendersubbezier = false;
+long double subbezierT        = 0.5L;
 
-auto findPoint(int x, int y, int radius)
+namespace calculate
 {
-	for(auto it = points.begin(); it < points.end(); it++)
-		if(((it->first + radius >= x) && (it->first - radius <= x)) && ((it->second + radius >= y) && (it->second - radius <= y)))
-			return it;
-
-	return points.end();
-}
-
-void renderCircle(int x, int y, int radius)
-{
-	glBegin(GL_LINE_LOOP);
-
-	for(int dx = -radius; dx <= radius; dx++)
+	auto findPointOnClickPos(int x, int y, int radius)
 	{
-		glVertex2i(x + dx, y + sqrt(radius*radius - dx*dx));
-		glVertex2i(x + dx, y - sqrt(radius*radius - dx*dx));
+		for(auto point = basepoints.begin(); point < basepoints.end(); point++)
+			if(((point->first  + radius >= x) && (point->first  - radius <= x)) 
+			&& ((point->second + radius >= y) && (point->second - radius <= y)))
+				return point;
+
+		return basepoints.end();
 	}
 
-	glEnd();
-}
+	void calculateBezierPoint(long double t, int point)
+	{	
+		if(basepoints.empty())
+			return;
 
-void renderBezierPoint(double t)
-{	
-	if(points.empty())
-		return;
+		tmppoints.clear();
+		tmppoints.resize((basepoints.size()*(basepoints.size() + 1)) / 2);
 
-	tmppoints.clear();
-	tmppoints.resize((points.size()*(points.size() + 1)) / 2);
+		for(int p = 0; p < basepoints.size(); p++)
+			tmppoints[p] = basepoints[p];
 
-	memcpy(tmppoints.data(), points.data(), points.size()*sizeof(p));
+		int stacked = basepoints.size();
+		for(auto layer = basepoints.size()-1; layer > 0; layer--)
+		{
+			for(size_t point = stacked; point < stacked+layer; point++)
+			{	
+				tmppoints[point].first  = tmppoints[point-layer-1].first + 
+				    (tmppoints[point-layer].first  - tmppoints[point-layer-1].first)*t;
 
-	int stack = points.size();
-	for(auto layer = points.size()-1; layer > 0; layer--)
-	{
-		for(auto point = stack; point < stack+layer; point++)
-		{	
-			tmppoints[point].first = tmppoints[point-layer-1].first + round((tmppoints[point-layer].first - tmppoints[point-layer-1].first)*t);
-			tmppoints[point].second = tmppoints[point-layer-1].second + round((tmppoints[point-layer].second - tmppoints[point-layer-1].second)*t);
+				tmppoints[point].second = tmppoints[point-layer-1].second + 
+				    (tmppoints[point-layer].second - tmppoints[point-layer-1].second)*t;
+			}
+
+			stacked += layer;
 		}
 
-		stack += layer;
+		if(point != -1) //calculating subbezier
+			bezierpoints[point] = tmppoints.end()[-1];
 	}
-	bezierpoints.push_back(tmppoints.end()[-1]);
-}
 
-void renderBezierCurve()
-{		
-	bezierpoints.clear();
+	void calculateBezierCurve()
+	{		
+		bezierpoints.clear();
+		bezierpoints.resize(precisionpoints+1);
 
-	for(double t = 0; t < 1; t += precision)
-		renderBezierPoint(t);
-}
+		long double t = 0.0L;
+		for(int point = 0; point <= precisionpoints; point++, t += precision)
+			calculateBezierPoint(t, point);
+	}
 
-void reshape(int w, int h)
+} // namespace calculate
+
+namespace render
 {
-	glViewport(0, 0, w, h);
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluOrtho2D(0, w, h, 0);
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-}
-
-void display()
-{
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glLineWidth(2);
-	glBegin(GL_LINE_STRIP);
-
-	glColor3f(1.0, 1.0, 1.0);
-
-	for (auto p : points)
-		glVertex2i(p.first, p.second);
-
-	glEnd();
-
-	for (auto p : points)
-		renderCircle(p.first, p.second, base_radius);
-
-	if(isrendersubbezier)
+	void renderCircle(int x, int y, int radius)
 	{
-		renderBezierPoint(subbezierT);
-		srand(0x12e15e35b500f16e);
+		glLineWidth(1);
+		glBegin(GL_LINE_LOOP);
 
-		int stack = 0;
-		for(auto layer = points.size(); layer > 0; layer--)
+		for(int dx = -radius; dx <= radius; dx++)
 		{
-			glBegin(GL_LINE_STRIP);
-			glColor3ub(rand()%255, rand()%255, rand()%255);
+			glVertex2i(x + dx, y + sqrt(radius*radius - dx*dx));
+			glVertex2i(x + dx, y - sqrt(radius*radius - dx*dx));
+		}
 
-			for(int point = stack; point < stack+layer; point++)
-				glVertex2i(tmppoints[point].first, tmppoints[point].second);
+		glEnd();
+	}
+
+} // namespace render
+
+namespace eventHandler
+{
+	void reshape(int w, int h)
+	{
+		glViewport(0, 0, w, h);
+
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluOrtho2D(0, w, h, 0);
+
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+	}
+
+	void display()
+	{
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glLineWidth(2);
+		glBegin(GL_LINE_STRIP);
+
+		glColor3f(1.0, 1.0, 1.0);
+
+		for (auto p : basepoints)
+			glVertex2i(p.first, p.second);
+
+		glEnd();
+
+		for (auto p : basepoints)
+			render::renderCircle(p.first, p.second, base_radius);
+
+		if(isrendersubbezier)
+		{
+			calculate::calculateBezierPoint(subbezierT, -1);
+			srand(0x12e15e35b500f16e);
+
+			int stacked = basepoints.size();
+			for(auto layer = basepoints.size()-1; layer > 0; layer--)
+			{
+				glBegin(GL_LINE_STRIP);
+				glColor3ub(rand()%255, rand()%255, rand()%255);
+
+				for(int point = stacked; point < stacked+layer; point++)
+					glVertex2i(tmppoints[point].first, tmppoints[point].second);
+					
+				glEnd();
+
+				for(int point = stacked; point < stacked+layer; point++)
+					render::renderCircle(tmppoints[point].first, 
+										tmppoints[point].second, base_radius-1);
+
+				stacked += layer;
+			}
+		}
+
+		calculate::calculateBezierCurve();
+		
+		glLineWidth(2);
+		glBegin(GL_LINE_STRIP);
+
+		glColor3f(1.0, 0, 0);
+		for(auto p : bezierpoints)
+			glVertex2i(p.first, p.second);
+
+		glEnd();
+
+		glutSwapBuffers();
+	}
+
+	void mouse(int button, int state, int x, int y)
+	{
+		if (button == GLUT_LEFT_BUTTON)
+		{
+			if (state == GLUT_DOWN)
+			{
+				auto point_on_click = calculate::findPointOnClickPos(x, y, base_radius);
 				
-			glEnd();
+				if(movingpoint != basepoints.end())
+				{
+					movingpoint->first = x;
+					movingpoint->second = y;
 
-			for(int point = stack; point < stack+layer; point++)
-				renderCircle(tmppoints[point].first, tmppoints[point].second, base_radius-1);
+					movingpoint = basepoints.end();
 
-			stack += layer;
+					return;
+				}
+
+				if(point_on_click == basepoints.end())
+				{
+					basepoints.push_back({x, y});
+
+					movingpoint = basepoints.end();
+				}
+				else
+					movingpoint = point_on_click;
+			}
 		}
-	}
-
-	renderBezierCurve();
-	glBegin(GL_LINE_STRIP);
-
-	glColor3f(1.0, 0, 0);
-	for(auto p : bezierpoints)
-		glVertex2i(p.first, p.second);
-
-	glEnd();
-
-	glutSwapBuffers();
-}
-
-void mouse(int button, int state, int x, int y)
-{
-	if (button == GLUT_LEFT_BUTTON)
-	{
-		if (state == GLUT_DOWN)
+		else if(button == GLUT_RIGHT_BUTTON)
 		{
-			auto point = findPoint(x, y, base_radius);
-			
-			if(movpoint != points.end())
+			if(state == GLUT_DOWN)
 			{
-				movpoint->first = x;
-				movpoint->second = y;
-				movpoint = points.end();
-
-				return;
+				auto point_on_click = calculate::findPointOnClickPos(x, y, base_radius);
+				if(point_on_click != basepoints.end())
+				{
+					basepoints.erase(point_on_click);
+					
+					movingpoint = basepoints.end();
+				}
 			}
-
-			if(point == points.end())
-			{
-				points.push_back({x, y});
-				movpoint = points.end();
-			}
-			else
-				movpoint = point;
 		}
 	}
-	else if(button == GLUT_RIGHT_BUTTON)
+
+	void keyboard(unsigned char key, int x, int y)
 	{
-		if(state == GLUT_DOWN)
+		switch(key)
 		{
-			auto point = findPoint(x, y, base_radius);
-			if(point != points.end())
-			{
-				points.erase(point);
-				movpoint = points.end();
-			}
+			case 'q':
+				isrendersubbezier = !isrendersubbezier;
+				display();
+			break;
+
+			case 'a':
+				if((subbezierT - precision) >= 0.0L)
+				{
+					subbezierT -= precision;
+					display();
+				}
+			break;
+
+			case 'd':
+				if((subbezierT + precision)<= 1.0L)
+				{
+					subbezierT += precision;
+					display();
+				}
+			break;
+
+			case 'w':
+				if((subbezierT + 0.01L) <= 1.0L)
+				{
+					subbezierT += 0.01L;
+					display();
+				}
+			break;
+
+			case 's':
+				if((subbezierT - 0.01L) >= 0.0L)
+				{
+					subbezierT -= 0.01L;
+					display();
+				}
+			break;
 		}
 	}
-}
-
-void keyboard(unsigned char key, int x, int y)
-{
-	switch(key)
-	{
-		case 'q':
-			isrendersubbezier = !isrendersubbezier;
-		break;
-
-		case 'a':
-			if((subbezierT - precision) >= 0)
-				subbezierT -= precision;
-		break;
-
-		case 'd':
-			if((subbezierT + precision)<= 1)
-				subbezierT += precision;
-		break;
-
-		case 'w':
-			if((subbezierT + 0.01) <= 1)
-				subbezierT += 0.01;
-		break;
-
-		case 's':
-			if((subbezierT - 0.01) >= 0)
-				subbezierT -= 0.01;
-		break;
-	}
-	display();
-}
+} // namespace eventHandler
 
 int main(int argc, char *argv[])
 {
@@ -216,10 +258,10 @@ int main(int argc, char *argv[])
 	glutInitWindowSize(1000, 800);
 	glutCreateWindow("Bezier curves");
 
-	glutReshapeFunc(reshape);
-	glutDisplayFunc(display);
-	glutMouseFunc(mouse);
-	glutKeyboardFunc(keyboard);
+	glutReshapeFunc(eventHandler::reshape);
+	glutDisplayFunc(eventHandler::display);
+	glutMouseFunc(eventHandler::mouse);
+	glutKeyboardFunc(eventHandler::keyboard);
 
 	glutMainLoop();
 
